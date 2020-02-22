@@ -203,6 +203,8 @@ def getreward(wechat_id,name):
             if(result[0][4]==0): #0 stands for not-allowed-reuse
                 if wechat_id in str(result[0][3]).split(','):
                     return -15 #already used
+            if(_search(wechat_id)[0]+result[0][1]<0):
+                return -16
             sql= 'UPDATE rewards SET usageLeft = usageLeft - 1 WHERE Name = "%s"' % (result[0][0])
             cursor.execute(sql)
             sql= 'UPDATE rewards SET usedUsers = "%s" WHERE Name = "%s"' % (str(wechat_id)+","+str(result[0][3]),name)
