@@ -156,7 +156,7 @@ def update_point(wechat_id,delta):
     except:
         db.rollback()
         cursor.close() 
-        return -2 #Failed
+        return -20 #Failed
 
 def update_name(wechat_id,new_name):
     # 更改用户名的方法
@@ -211,9 +211,8 @@ def getreward(wechat_id,name):
             if(result[0][4]==0): #0 stands for not-allowed-reuse
                 if wechat_id in str(result[0][3]).split(','):
                     return -15 #already used
-
             if(_search(wechat_id)[0]+result[0][1]<0):
-                return -16 
+                return -16 # Not enough point
             sql= 'UPDATE rewards SET usageLeft = usageLeft - 1 WHERE Name = "%s"' % (result[0][0])
             cursor.execute(sql)
             sql= 'UPDATE rewards SET usedUsers = "%s" WHERE Name = "%s"' % (str(wechat_id)+","+str(result[0][3]),name)
@@ -253,37 +252,32 @@ def reply_bonus(message, session, match):
 
 @robot.filter(re.compile("激活([\t ]*)(.*)"))
 def reply_change(message,session, matchObj):
+    reply_msg={1:"激活成功！",-15:"激活失败，该奖励码每人仅限兑换一次。",
+-10:"激活失败，输入的奖励码有误。",-20:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。",-1:"您尚未注册。"
+}
     cdk=matchObj.group(2).strip()
     if(len(cdk)!=0):
-        result=usecdk(message.source,cdk)
-        if(result==1):
-            return "激活成功！"
-        else:
-            return "您的代码无效或已被使用。"
+        return reply_msg[usecdk(message.source,cdk)]
     else:
         return '请按照"激活 代码"（如：激活 sample）的格式输入。'
 
 @robot.filter(re.compile("改名([\t ]*)(.*)"))
 def reply_change(message,session, matchObj):
+    reply_msg={1:"修改成功！",-1:"您尚未注册，不能执行此操作。请先注册。",-2:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。"}
     if(len(matchObj.group(2).strip())!=0):
-        result=update_name(message.source,matchObj.group(2).strip())
-        if(result==1):
-            return "修改成功！"
-        else:
-            return "您尚未注册，不能执行此操作。请先注册。"
+        return reply_msg[update_name(message.source,matchObj.group(2).strip())]
     else:
         return '请按照"改名 姓名"（如：改名 王老板）的格式输入。'
 
 @robot.filter(re.compile("兑换([\t ]*)(.*)"))
 def reply_reward(message,session, matchObj):
+    reply_msg={1:"兑换成功！请等待工作人员联系。",-15:"兑换失败，该物品每人仅限兑换一次。",
+-16:"兑换失败，您的积分不足",-30:"兑换失败，积分不足。",-20:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。",-1:"您尚未注册。",
+-10:"兑换失败，输入的物品名有误。"
+}
     cdk=matchObj.group(2).strip()
     if(len(cdk)!=0):
-        result=getreward(message.source,cdk)
-        if(result==1):
-            return "兑换成功！请等待工作人员联系。"
-        else:
-            print(result)
-            return "库存不足或已到最大兑换限度。"
+        return reply_msg[getreward(message.source,cdk)]
     else:
         cursor = db.cursor()
         sql = "SELECT * FROM rewards"
@@ -298,7 +292,7 @@ def reply_reward(message,session, matchObj):
                 reuse_ = row[4]
                 resultstr=resultstr+ "%s,所需积分%d,剩余个数%d,是否可以重复兑换%d\n" % (name_,-point_, use_, reuse_)
         except:
-            return "数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。"
+            return reply_msg[-20]
     return resultstr +'请按照"兑换 物品名"（如：兑换 sample）的格式输入。'
 
 def reply_help():
@@ -314,6 +308,7 @@ def reply_add_cdk(message):
     if (message.source in admin):
         return "success"
     return "权限不足"
+    
 @robot.handler
 def reply_no_found():
     return "找不到您所输入的指令，请检查您的输入。"
