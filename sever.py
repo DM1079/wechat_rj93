@@ -47,7 +47,9 @@ def _logging(**kwargs):
     log.addHandler(th)
     log.setLevel(level)
     return log
-
+my_sender=""
+my_pass=""
+my_user=""
 with open('config.json') as f:
     fileJson=json.load(f)
     robot = werobot.WeRoBot(token=fileJson['token'])
@@ -60,10 +62,14 @@ with open('config.json') as f:
     my_user=fileJson['mailreceiver']
     dbuser,dbpass=fileJson['baseName'],fileJson['basePass']
 
+
+
 def mail(text):
+    print("Email sender called")
     ret = True
     try:
     # 邮件内容
+        print(my_pass)
         msg = MIMEText(text, 'plain', 'utf-8')
     # 括号里的对应发件人邮箱昵称、发件人邮箱账号
         msg['From'] = formataddr(["微信公众号后台", my_sender])
@@ -75,9 +81,11 @@ def mail(text):
         server.login(my_sender, my_pass)
         server.sendmail(my_sender, [my_user, ], msg.as_string())
         server.quit()
+        print("here")
     except Exception:
         ret = False
         return ret
+    return ret
 
 os.makedirs('./logs', exist_ok=True)
 logger = _logging(filename='./logs/default')
@@ -203,15 +211,17 @@ def getreward(wechat_id,name):
             if(result[0][4]==0): #0 stands for not-allowed-reuse
                 if wechat_id in str(result[0][3]).split(','):
                     return -15 #already used
+
             if(_search(wechat_id)[0]+result[0][1]<0):
-                return -16
+                return -16 
             sql= 'UPDATE rewards SET usageLeft = usageLeft - 1 WHERE Name = "%s"' % (result[0][0])
             cursor.execute(sql)
             sql= 'UPDATE rewards SET usedUsers = "%s" WHERE Name = "%s"' % (str(wechat_id)+","+str(result[0][3]),name)
             cursor.execute(sql)
             db.commit()
             cursor.close()
-            if(mail(_search(message.source)[1]+"("+str(message.source)+")兑换了["+result[0][0]+"]，请尽快处理")):
+            print("Starting searching info")
+            if(mail(_search(wechat_id)[1]+"("+str(wechat_id)+")兑换了["+result[0][0]+"]，请尽快处理")):
                 return update_point(wechat_id,result[0][1]) 
             return -30 # Failed to send email to the admin
         return -10 # No accessible cdk found
@@ -272,6 +282,7 @@ def reply_reward(message,session, matchObj):
         if(result==1):
             return "兑换成功！请等待工作人员联系。"
         else:
+            print(result)
             return "库存不足或已到最大兑换限度。"
     else:
         cursor = db.cursor()
