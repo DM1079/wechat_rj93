@@ -48,14 +48,19 @@ def _logging(**kwargs):
     log.setLevel(level)
     return log
 
+with open('config.json') as f:
+    fileJson=json.load(f)
+    robot = werobot.WeRoBot(token=fileJson['token'])
+    robot.config['APP_ID']=fileJson['appID']
+    robot.config['APP_SECRET']=fileJson['appsecret']
+    robot.config['HOST'] = fileJson['host']
+    robot.config['PORT'] = fileJson['port']
+    my_sender=fileJson['mailsender']
+    my_pass=fileJson['mailpass']
+    my_user=fileJson['mailreceiver']
+    dbuser,dbpass=fileJson['baseName'],fileJson['basePass']
 
 def mail(text):
-    # 发件人邮箱账号
-    my_sender = 'rj93Admin@sukidayo.top'
-    my_pass = 'Ruanjian93'
-    # 收件人帐号
-    my_user = '1419111431@qq.com' #mdh的邮箱地址
-
     ret = True
     try:
     # 邮件内容
@@ -77,14 +82,6 @@ def mail(text):
 os.makedirs('./logs', exist_ok=True)
 logger = _logging(filename='./logs/default')
 
-with open('config.json') as f:
-    fileJson=json.load(f)
-    robot = werobot.WeRoBot(token=fileJson['token'])
-    robot.config['APP_ID']=fileJson['appID']
-    robot.config['APP_SECRET']=fileJson['appsecret']
-    robot.config['HOST'] = fileJson['host']
-    robot.config['PORT'] = fileJson['port']
-    dbuser,dbpass=fileJson['baseName'],fileJson['basePass']
 
 admin=[]
 with open('admins.ini') as f:
