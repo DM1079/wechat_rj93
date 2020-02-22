@@ -290,7 +290,7 @@ def reply_reward(message,session, matchObj):
                 point_ = row[1]
                 use_ = row[2]
                 reuse_ = row[4]
-                resultstr=resultstr+ "%s,所需积分%d,剩余个数%d,是否可以重复兑换%d\n" % (name_,-point_, use_, reuse_)
+                resultstr=resultstr+ "%s，所需积分%d，剩余个数%d，%s允许重复兑换\n" % (name_,-point_, use_, "" if reuse_ else "不")
         except:
             return reply_msg[-20]
     return resultstr +'请按照"兑换 物品名"（如：兑换 sample）的格式输入。'
@@ -308,7 +308,7 @@ def reply_add_cdk(message):
     if (message.source in admin):
         return "success"
     return "权限不足"
-    
+
 @robot.handler
 def reply_no_found():
     return "找不到您所输入的指令，请检查您的输入。"
