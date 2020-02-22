@@ -12,6 +12,9 @@ from logging import handlers
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
+my_sender=""
+my_pass=""
+my_user=""
 
 def _logging(**kwargs):
     level = kwargs.pop('level', None)
@@ -51,7 +54,7 @@ def _logging(**kwargs):
     log.setLevel(level)
     return log
 
-
+    
 with open('config.json') as f:
     fileJson = json.load(f)
     robot = werobot.WeRoBot(token=fileJson['token'])
@@ -64,11 +67,12 @@ with open('config.json') as f:
     my_user = fileJson['mailreceiver']
     dbuser, dbpass = fileJson['baseName'], fileJson['basePass']
 
-
 def mail(text):
+    print("Email sender called")
     ret = True
     try:
-        # 邮件内容
+    # 邮件内容
+        print(my_pass)
         msg = MIMEText(text, 'plain', 'utf-8')
     # 括号里的对应发件人邮箱昵称、发件人邮箱账号
         msg['From'] = formataddr(["微信公众号后台", my_sender])
@@ -80,9 +84,11 @@ def mail(text):
         server.login(my_sender, my_pass)
         server.sendmail(my_sender, [my_user, ], msg.as_string())
         server.quit()
+        print("here")
     except Exception:
         ret = False
         return ret
+    return ret
 
 
 os.makedirs('./logs', exist_ok=True)
@@ -162,8 +168,8 @@ def update_point(wechat_id, delta):
         return 1  # success
     except:
         db.rollback()
-        cursor.close()
-        return -2  # Failed
+        cursor.close() 
+        return -20 #Failed
 
 
 def update_name(wechat_id, new_name):
@@ -223,19 +229,21 @@ def getreward(wechat_id, name):
         if(len(result) != 0):
             if(result[0][4] == 0):  # 0 stands for not-allowed-reuse
                 if wechat_id in str(result[0][3]).split(','):
-                    return -15  # already used
-            sql = 'UPDATE rewards SET usageLeft = usageLeft - 1 WHERE Name = "%s"' % (
-                result[0][0])
+                    return -15 #already used
+            if(_search(wechat_id)[0]+result[0][1]<0):
+                return -16 # Not enough point
+            sql= 'UPDATE rewards SET usageLeft = usageLeft - 1 WHERE Name = "%s"' % (result[0][0])
             cursor.execute(sql)
             sql = 'UPDATE rewards SET usedUsers = "%s" WHERE Name = "%s"' % (
                 str(wechat_id)+","+str(result[0][3]), name)
             cursor.execute(sql)
             db.commit()
             cursor.close()
-            if(mail(_search(message.source)[1]+"("+str(message.source)+")兑换了["+result[0][0]+"]，请尽快处理")):
-                return update_point(wechat_id, result[0][1])
-            return -30  # Failed to send email to the admin
-        return -10  # No accessible cdk found
+            print("Starting searching info")
+            if(mail(_search(wechat_id)[1]+"("+str(wechat_id)+")兑换了["+result[0][0]+"]，请尽快处理")):
+                return update_point(wechat_id,result[0][1]) 
+            return -30 # Failed to send email to the admin
+        return -10 # No accessible cdk found
     except:
         db.rollback()
         cursor.close()
@@ -268,39 +276,35 @@ def reply_bonus(message, session, match):
 
 
 @robot.filter(re.compile("激活([\t ]*)(.*)"))
-def reply_change(message, session, matchObj):
-    cdk = matchObj.group(2).strip()
-    if(len(cdk) != 0):
-        result = usecdk(message.source, cdk)
-        if(result == 1):
-            return "激活成功！"
-        else:
-            return "您的代码无效或已被使用。"
+def reply_change(message,session, matchObj):
+    reply_msg={1:"激活成功！",-15:"激活失败，该奖励码每人仅限兑换一次。",
+-10:"激活失败，输入的奖励码有误。",-20:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。",-1:"您尚未注册。"
+}
+    cdk=matchObj.group(2).strip()
+    if(len(cdk)!=0):
+        return reply_msg[usecdk(message.source,cdk)]
     else:
         return '请按照"激活 代码"（如：激活 sample）的格式输入。'
 
 
 @robot.filter(re.compile("改名([\t ]*)(.*)"))
-def reply_change(message, session, matchObj):
-    if(len(matchObj.group(2).strip()) != 0):
-        result = update_name(message.source, matchObj.group(2).strip())
-        if(result == 1):
-            return "修改成功！"
-        else:
-            return "您尚未注册，不能执行此操作。请先注册。"
+def reply_change(message,session, matchObj):
+    reply_msg={1:"修改成功！",-1:"您尚未注册，不能执行此操作。请先注册。",-2:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。"}
+    if(len(matchObj.group(2).strip())!=0):
+        return reply_msg[update_name(message.source,matchObj.group(2).strip())]
     else:
         return '请按照"改名 姓名"（如：改名 王老板）的格式输入。'
 
 
 @robot.filter(re.compile("兑换([\t ]*)(.*)"))
-def reply_reward(message, session, matchObj):
-    cdk = matchObj.group(2).strip()
-    if(len(cdk) != 0):
-        result = getreward(message.source, cdk)
-        if(result == 1):
-            return "兑换成功！请等待工作人员联系。"
-        else:
-            return "库存不足或已到最大兑换限度。"
+def reply_reward(message,session, matchObj):
+    reply_msg={1:"兑换成功！请等待工作人员联系。",-15:"兑换失败，该物品每人仅限兑换一次。",
+-16:"兑换失败，您的积分不足",-30:"兑换失败，积分不足。",-20:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。",-1:"您尚未注册。",
+-10:"兑换失败，输入的物品名有误。"
+}
+    cdk=matchObj.group(2).strip()
+    if(len(cdk)!=0):
+        return reply_msg[getreward(message.source,cdk)]
     else:
         cursor = db.cursor()
         sql = "SELECT * FROM rewards"
@@ -313,13 +317,10 @@ def reply_reward(message, session, matchObj):
                 point_ = row[1]
                 use_ = row[2]
                 reuse_ = row[4]
-                resultstr = resultstr + \
-                    "%s,所需积分%d,剩余个数%d,是否可以重复兑换%d\n" % (
-                        name_, -point_, use_, reuse_)
+                resultstr=resultstr+ "%s，所需积分%d，剩余个数%d，%s允许重复兑换\n" % (name_,-point_, use_, "" if reuse_ else "不")
         except:
-            return "数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。"
-    return resultstr + '请按照"兑换 物品名"（如：兑换 sample）的格式输入。'
-
+            return reply_msg[-20]
+    return resultstr +'请按照"兑换 物品名"（如：兑换 sample）的格式输入。'
 
 def reply_help():
     return '回复"注册 用户名"（如：注册 王老板）为当前微信号注册账号\n回复"查询"获取当前积分\n回复"签到"获取积分+1\
@@ -337,7 +338,6 @@ def reply_add_cdk(message):
     if (message.source in admin):
         return "success"
     return "权限不足"
-
 
 @robot.handler
 def reply_no_found():
