@@ -34,7 +34,7 @@
 {
     "appID": "",
     "appsecret": "",
-    "token": """,
+    "token": "",
     "host": "mysql地址，默认0.0.0.0",
     "port": "mysql端口",
     "baseName": "mysql用户名",
