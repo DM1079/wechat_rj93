@@ -1,15 +1,20 @@
-import werobot
-import json
-import pymysql
+import os
 import re
 import sys
+import json
+import werobot
+import pymysql
 import logging
-import os
-import threading
-from logging import handlers
 import smtplib
+import threading
+
+from logging import handlers
 from email.mime.text import MIMEText
 from email.utils import formataddr
+
+my_sender=""
+my_pass=""
+my_user=""
 
 def _logging(**kwargs):
     level = kwargs.pop('level', None)
@@ -40,29 +45,27 @@ def _logging(**kwargs):
     th_debug.setLevel(logging.DEBUG)
     log.addHandler(th_debug)
 
-    th = handlers.TimedRotatingFileHandler(filename=filename, when='D', encoding='utf-8')
+    th = handlers.TimedRotatingFileHandler(
+        filename=filename, when='D', encoding='utf-8')
     th.suffix = "%Y-%m-%d.log"
     th.setFormatter(format_str)
     th.setLevel(logging.INFO)
     log.addHandler(th)
     log.setLevel(level)
     return log
-my_sender=""
-my_pass=""
-my_user=""
+
+    
 with open('config.json') as f:
-    fileJson=json.load(f)
+    fileJson = json.load(f)
     robot = werobot.WeRoBot(token=fileJson['token'])
-    robot.config['APP_ID']=fileJson['appID']
-    robot.config['APP_SECRET']=fileJson['appsecret']
+    robot.config['APP_ID'] = fileJson['appID']
+    robot.config['APP_SECRET'] = fileJson['appsecret']
     robot.config['HOST'] = fileJson['host']
     robot.config['PORT'] = fileJson['port']
-    my_sender=fileJson['mailsender']
-    my_pass=fileJson['mailpass']
-    my_user=fileJson['mailreceiver']
-    dbuser,dbpass=fileJson['baseName'],fileJson['basePass']
-
-
+    my_sender = fileJson['mailsender']
+    my_pass = fileJson['mailpass']
+    my_user = fileJson['mailreceiver']
+    dbuser, dbpass = fileJson['baseName'], fileJson['basePass']
 
 def mail(text):
     print("Email sender called")
@@ -87,36 +90,42 @@ def mail(text):
         return ret
     return ret
 
+
 os.makedirs('./logs', exist_ok=True)
 logger = _logging(filename='./logs/default')
 
 
-admin=[]
+admin = []
 with open('admins.ini') as f:
-    for line in f.readlines():  
-        line=line.strip('\n')
+    for line in f.readlines():
+        line = line.strip('\n')
         admin.append(line)
 print(admin)
-db=pymysql.connect(host = '127.0.0.1' ,user =dbuser , passwd=dbpass, port= 3306, db='rj93' , charset='utf8' )
+db = pymysql.connect(host='127.0.0.1', user=dbuser,
+                     passwd=dbpass, port=3306, db='rj93', charset='utf8')
 
-def reg(wechat_id,name):
-    se_result=_search(wechat_id)
-    if(se_result[0]!=sys.maxsize):
+
+def reg(wechat_id, name):
+    se_result = _search(wechat_id)
+    if(se_result[0] != sys.maxsize):
         return '%s，您已经注册过了，修改信息执行"改名"指令。' % se_result[1]
     cursor = db.cursor()
-    sql = 'INSERT INTO wechat(wechat_id, point, name) VALUES ("%s",%d,"%s")' % (wechat_id, 0, name)
+    sql = 'INSERT INTO wechat(wechat_id, point, name) VALUES ("%s",%d,"%s")' % (
+        wechat_id, 0, name)
     try:
         cursor.execute(sql)
         db.commit()
-        cursor.close() 
-        logger.info('%s registered with name %s successfully'%(wechat_id,name))
+        cursor.close()
+        logger.info('%s registered with name %s successfully' %
+                    (wechat_id, name))
         return "注册成功！"
     except:
         # rollback when exception occurs
         db.rollback()
-        cursor.close() 
-        logger.info('%s failed to register with name %s'%(wechat_id,name))
+        cursor.close()
+        logger.info('%s failed to register with name %s' % (wechat_id, name))
         return "数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。"
+
 
 def _search(wechat_id):
     # returns (point,name). If not registered, point=sys.maxsize
@@ -125,97 +134,108 @@ def _search(wechat_id):
     try:
         cursor.execute(sql)
         result = cursor.fetchall()
-        cursor.close() 
-        if(len(result)!=0):
-            return result[0][1],result[0][2]
+        cursor.close()
+        if(len(result) != 0):
+            return result[0][1], result[0][2]
     except:
-        cursor.close() 
-        return sys.maxsize,''
-    return sys.maxsize,''
+        cursor.close()
+        return sys.maxsize, ''
+    return sys.maxsize, ''
+
 
 def search(wechat_id):
-    se_result=_search(wechat_id)
-    if(se_result[0]==sys.maxsize):
+    se_result = _search(wechat_id)
+    if(se_result[0] == sys.maxsize):
         return "您尚未注册，不能执行此操作。请先注册。"
     else:
-        return "%s，您的可用积分为：%d"%(se_result[1],se_result[0])
+        return "%s，您的可用积分为：%d" % (se_result[1], se_result[0])
 
-def update_point(wechat_id,delta):
+
+def update_point(wechat_id, delta):
     # 更改积分的方法 delta为积分增量
-    se_result=_search(wechat_id)
-    if(se_result[0]==sys.maxsize):
-        return -1  #Not registered
+    se_result = _search(wechat_id)
+    if(se_result[0] == sys.maxsize):
+        return -1  # Not registered
     cursor = db.cursor()
-    sql =  'UPDATE wechat SET point = point + %d WHERE wechat_id = "%s"' % (delta,wechat_id)
+    sql = 'UPDATE wechat SET point = point + %d WHERE wechat_id = "%s"' % (
+        delta, wechat_id)
     try:
         cursor.execute(sql)
         db.commit()
-        cursor.close() 
-        logger.info('%s \'s point update with increment %d'%(wechat_id,delta))
-        return 1 #success
+        cursor.close()
+        logger.info('%s \'s point update with increment %d' %
+                    (wechat_id, delta))
+        return 1  # success
     except:
         db.rollback()
         cursor.close() 
         return -20 #Failed
 
-def update_name(wechat_id,new_name):
+
+def update_name(wechat_id, new_name):
     # 更改用户名的方法
-    se_result=_search(wechat_id)
-    if(se_result[0]==sys.maxsize):
-        return -1  #Not registered
+    se_result = _search(wechat_id)
+    if(se_result[0] == sys.maxsize):
+        return -1  # Not registered
     cursor = db.cursor()
-    sql =  'UPDATE wechat SET name = "%s" WHERE wechat_id = "%s"' % (new_name,wechat_id)
+    sql = 'UPDATE wechat SET name = "%s" WHERE wechat_id = "%s"' % (
+        new_name, wechat_id)
     try:
         cursor.execute(sql)
         db.commit()
-        cursor.close() 
-        logger.info('%s update name to %s'%(wechat_id , new_name))
-        return 1 #success
-    except:
-        db.rollback()
-        cursor.close() 
-        return -2 #Failed
-
-def usecdk(wechat_id,cdk):
-    # 使用激活码兑换积分的方法
-    cursor = db.cursor()
-    sql='SELECT * FROM cdkeys WHERE cdkey = "%s" AND usageLeft > 0 ' % (cdk)
-    try:
-        cursor.execute(sql)
-        result = cursor.fetchall()
-        if(len(result)!=0):
-            if(result[0][4]==0): #0 stands for not-allowed-reuse
-                if wechat_id in str(result[0][3]).split(','):
-                    return -15 #already used
-            sql= 'UPDATE cdkeys SET usageLeft = usageLeft - 1 WHERE cdkey = "%s"' % (result[0][0])
-            cursor.execute(sql)
-            sql= 'UPDATE cdkeys SET usedUsers = "%s" WHERE cdkey = "%s"' % (str(wechat_id)+","+str(result[0][3]),cdk)
-            cursor.execute(sql)
-            db.commit()
-            cursor.close()
-            return update_point(wechat_id,result[0][1]) 
-        return -10 # No accessible cdk found
+        cursor.close()
+        logger.info('%s update name to %s' % (wechat_id, new_name))
+        return 1  # success
     except:
         db.rollback()
         cursor.close()
-        return -20 # exception occured
+        return -2  # Failed
 
-def getreward(wechat_id,name):
-    # 使用积分兑换奖品的方法
+
+def usecdk(wechat_id, cdk):
+    # 使用激活码兑换积分的方法
     cursor = db.cursor()
-    sql='SELECT * FROM rewards WHERE Name = "%s" AND usageLeft > 0 ' % (name)
+    sql = 'SELECT * FROM cdkeys WHERE cdkey = "%s" AND usageLeft > 0 ' % (cdk)
     try:
         cursor.execute(sql)
         result = cursor.fetchall()
-        if(len(result)!=0):
-            if(result[0][4]==0): #0 stands for not-allowed-reuse
+        if(len(result) != 0):
+            if(result[0][4] == 0):  # 0 stands for not-allowed-reuse
+                if wechat_id in str(result[0][3]).split(','):
+                    return -15  # already used
+            sql = 'UPDATE cdkeys SET usageLeft = usageLeft - 1 WHERE cdkey = "%s"' % (
+                result[0][0])
+            cursor.execute(sql)
+            sql = 'UPDATE cdkeys SET usedUsers = "%s" WHERE cdkey = "%s"' % (
+                str(wechat_id)+","+str(result[0][3]), cdk)
+            cursor.execute(sql)
+            db.commit()
+            cursor.close()
+            return update_point(wechat_id, result[0][1])
+        return -10  # No accessible cdk found
+    except:
+        db.rollback()
+        cursor.close()
+        return -20  # exception occured
+
+
+def getreward(wechat_id, name):
+    # 使用积分兑换奖品的方法
+    cursor = db.cursor()
+    sql = 'SELECT * FROM rewards WHERE Name = "%s" AND usageLeft > 0 ' % (name)
+    try:
+        cursor.execute(sql)
+        result = cursor.fetchall()
+        if(len(result) != 0):
+            if(result[0][4] == 0):  # 0 stands for not-allowed-reuse
                 if wechat_id in str(result[0][3]).split(','):
                     return -15 #already used
             if(_search(wechat_id)[0]+result[0][1]<0):
                 return -16 # Not enough point
             sql= 'UPDATE rewards SET usageLeft = usageLeft - 1 WHERE Name = "%s"' % (result[0][0])
             cursor.execute(sql)
-            sql= 'UPDATE rewards SET usedUsers = "%s" WHERE Name = "%s"' % (str(wechat_id)+","+str(result[0][3]),name)
+            sql = 'UPDATE rewards SET usedUsers = "%s" WHERE Name = "%s"' % (
+                str(wechat_id)+","+str(result[0][3]), name)
             cursor.execute(sql)
             db.commit()
             cursor.close()
@@ -227,28 +247,33 @@ def getreward(wechat_id,name):
     except:
         db.rollback()
         cursor.close()
-        return -20 # exception occured
+        return -20  # exception occured
+
 
 @robot.filter(re.compile("注册([\t ]*)(.*)"))
 def reply_reg(message, session, matchObj):
-    if(len(matchObj.group(2).strip())!=0):
-        return reg(message.source,matchObj.group(2))
+    if(len(matchObj.group(2).strip()) != 0):
+        return reg(message.source, matchObj.group(2))
     else:
         return '请按照"注册 用户名"（如：注册 王老板）的格式输入。'
+
 
 @robot.filter("查询")
 def reply_req(message):
     return search(message.source)
 
+
 @robot.filter("标识码")
 def reply_req(message, session, match):
     return (message.source)
 
+
 @robot.filter("签到")
 def reply_bonus(message, session, match):
-    if(update_point(message.source,+100)==1):
+    if(update_point(message.source, +100) == 1):
         return "签到成功，积分+100！"
     return "您尚未注册，不能执行此操作。请先注册。"
+
 
 @robot.filter(re.compile("激活([\t ]*)(.*)"))
 def reply_change(message,session, matchObj):
@@ -261,6 +286,7 @@ def reply_change(message,session, matchObj):
     else:
         return '请按照"激活 代码"（如：激活 sample）的格式输入。'
 
+
 @robot.filter(re.compile("改名([\t ]*)(.*)"))
 def reply_change(message,session, matchObj):
     reply_msg={1:"修改成功！",-1:"您尚未注册，不能执行此操作。请先注册。",-2:"数据库出现错误，请稍候再试。如果连续出现此提示请联系管理员。"}
@@ -268,6 +294,7 @@ def reply_change(message,session, matchObj):
         return reply_msg[update_name(message.source,matchObj.group(2).strip())]
     else:
         return '请按照"改名 姓名"（如：改名 王老板）的格式输入。'
+
 
 @robot.filter(re.compile("兑换([\t ]*)(.*)"))
 def reply_reward(message,session, matchObj):
@@ -284,7 +311,7 @@ def reply_reward(message,session, matchObj):
         try:
             cursor.execute(sql)
             results = cursor.fetchall()
-            resultstr=""
+            resultstr = ""
             for row in results:
                 name_ = row[0]
                 point_ = row[1]
@@ -298,9 +325,12 @@ def reply_reward(message,session, matchObj):
 def reply_help():
     return '回复"注册 用户名"（如：注册 王老板）为当前微信号注册账号\n回复"查询"获取当前积分\n回复"签到"获取积分+1\
     \n回复"激活"激活积分代码\n回复"改名"修改用户名\n回复"兑换"使用积分换取奖励'
-robot.add_filter(func=reply_help, rules=["？", "?","help"])
 
-#======= admin methods =======
+
+robot.add_filter(func=reply_help, rules=["？", "?", "help"])
+
+# ======= admin methods =======
+
 
 @robot.filter("后台")
 def reply_add_cdk(message):
@@ -312,6 +342,7 @@ def reply_add_cdk(message):
 @robot.handler
 def reply_no_found():
     return "找不到您所输入的指令，请检查您的输入。"
+
 
 # 让服务器监听在 0.0.0.0:2562
 robot.run()
