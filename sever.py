@@ -130,9 +130,8 @@ def reg(wechat_id, name):
 def _search(wechat_id):
     # returns (point,name). If not registered, point=sys.maxsize
     cursor = db.cursor()
-    sql = 'SELECT * FROM wechat WHERE wechat_id = "%s"' % (wechat_id)
     try:
-        cursor.execute(sql)
+        cursor.execute('SELECT * FROM wechat WHERE wechat_id = "%s"' ,(wechat_id))
         result = cursor.fetchall()
         cursor.close()
         if(len(result) != 0):
@@ -157,10 +156,8 @@ def update_point(wechat_id, delta):
     if(se_result[0] == sys.maxsize):
         return -1  # Not registered
     cursor = db.cursor()
-    sql = 'UPDATE wechat SET point = point + %d WHERE wechat_id = "%s"' % (
-        delta, wechat_id)
     try:
-        cursor.execute(sql)
+        cursor.execute('UPDATE wechat SET point = point + %d WHERE wechat_id = "%s"',(delta, wechat_id))
         db.commit()
         cursor.close()
         logger.info('%s \'s point update with increment %d' %
